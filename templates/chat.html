@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>E2E Chat</title>
+</head>
+
+<body>
+
+    <h1>E2E Encrypted Chat</h1>
+
+    <div id="messages"></div>
+
+    <input id="messageInput" placeholder="Type message">
+    <button onclick="sendMessage()">Send</button>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+    <script>
+
+        const socket = io();
+
+        function sendMessage() {
+
+            let input = document.getElementById("messageInput");
+
+            let message = input.value;
+
+            socket.emit("send_message", message);
+
+            input.value = "";
+        }
+
+        socket.on("receive_message", function(message) {
+
+            let messagesDiv = document.getElementById("messages");
+
+            messagesDiv.innerHTML += "<p>" + message + "</p>";
+
+        });
+
+    </script>
+
+</body>
+
+</html>
