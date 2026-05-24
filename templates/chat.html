@@ -1,46 +1,247 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <title>E2E Chat</title>
-</head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E2E Encrypted Chat</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f0f0f;
+      color: #fff;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      background: #1a1a1a;
+      padding: 16px 24px;
+      border-bottom: 1px solid #2a2a2a;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .lock-icon { font-size: 20px; }
+
+    .header-text h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .header-text p {
+      font-size: 12px;
+      color: #4caf50;
+    }
+
+    .sender-select {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+    }
+
+    .sender-btn {
+      padding: 6px 16px;
+      border-radius: 20px;
+      border: 1px solid #333;
+      background: transparent;
+      color: #888;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .sender-btn.active-alice {
+      background: #1a4a3a;
+      border-color: #4caf50;
+      color: #4caf50;
+    }
+
+    .sender-btn.active-bob {
+      background: #1a2a4a;
+      border-color: #4a9af5;
+      color: #4a9af5;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .message {
+      max-width: 65%;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .message.alice { align-self: flex-end; }
+    .message.bob   { align-self: flex-start; }
+
+    .message-bubble {
+      padding: 10px 14px;
+      border-radius: 16px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .message.alice .message-bubble {
+      background: #1a4a3a;
+      border: 1px solid #2a6a4a;
+      color: #e0ffe0;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.bob .message-bubble {
+      background: #1a2a4a;
+      border: 1px solid #2a4a7a;
+      color: #e0eeff;
+      border-bottom-left-radius: 4px;
+    }
+
+    .message-sender {
+      font-size: 11px;
+      color: #666;
+      padding: 0 4px;
+    }
+
+    .message.alice .message-sender { text-align: right; }
+
+    .encrypted-tag {
+      font-size: 10px;
+      color: #444;
+      padding: 0 4px;
+      font-family: monospace;
+    }
+
+    .message.alice .encrypted-tag { text-align: right; }
+
+    .input-area {
+      background: #1a1a1a;
+      border-top: 1px solid #2a2a2a;
+      padding: 16px 24px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .message-input {
+      flex: 1;
+      background: #252525;
+      border: 1px solid #333;
+      border-radius: 24px;
+      padding: 10px 18px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .message-input:focus { border-color: #4caf50; }
+
+    .send-btn {
+      background: #4caf50;
+      border: none;
+      border-radius: 24px;
+      padding: 10px 24px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .send-btn:hover { background: #43a047; }
+
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+      gap: 8px;
+    }
+
+    .empty-state .big { font-size: 40px; }
+    .empty-state p { font-size: 14px; }
+  </style>
+</head>
 <body>
 
+<div class="header">
+  <span class="lock-icon">🔒</span>
+  <div class="header-text">
     <h1>E2E Encrypted Chat</h1>
+    <p>🟢 X3DH + Double Ratchet — end-to-end encrypted</p>
+  </div>
+  <div class="sender-select">
+    <button class="sender-btn active-alice" id="btn-alice" onclick="setSender('alice')">Alice</button>
+    <button class="sender-btn" id="btn-bob" onclick="setSender('bob')">Bob</button>
+  </div>
+</div>
 
-    <div id="messages"></div>
+<div class="messages" id="messages">
+  <div class="empty-state" id="empty">
+    <span class="big">🔐</span>
+    <p>Secure session established. Start chatting.</p>
+  </div>
+</div>
 
-    <input id="messageInput" placeholder="Type message">
-    <button onclick="sendMessage()">Send</button>
+<div class="input-area">
+  <input class="message-input" id="messageInput"
+         type="text" placeholder="Type a message..."
+         onkeydown="if(event.key==='Enter') sendMessage()">
+  <button class="send-btn" onclick="sendMessage()">Send</button>
+</div>
 
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+  const socket = io();
+  let currentSender = "alice";
 
-    <script>
+  function setSender(sender) {
+    currentSender = sender;
+    document.getElementById("btn-alice").className =
+      "sender-btn" + (sender === "alice" ? " active-alice" : "");
+    document.getElementById("btn-bob").className =
+      "sender-btn" + (sender === "bob" ? " active-bob" : "");
+    document.getElementById("messageInput").placeholder =
+      `Type as ${sender === "alice" ? "Alice" : "Bob"}...`;
+  }
 
-        const socket = io();
+  function sendMessage() {
+    const input = document.getElementById("messageInput");
+    const message = input.value.trim();
+    if (!message) return;
+    socket.emit("send_message", JSON.stringify({ sender: currentSender, message: message }));
+    input.value = "";
+  }
 
-        function sendMessage() {
+  socket.on("receive_message", (data) => {
+    document.getElementById("empty")?.remove();
+    const messages = document.getElementById("messages");
 
-            let input = document.getElementById("messageInput");
+    const div = document.createElement("div");
+    div.className = `message ${data.sender}`;
 
-            let message = input.value;
+    div.innerHTML = `
+      <span class="message-sender">${data.sender === "alice" ? "Alice" : "Bob"}</span>
+      <div class="message-bubble">${data.message}</div>
+      <span class="encrypted-tag">🔒 ${data.encrypted}</span>
+    `;
 
-            socket.emit("send_message", message);
-
-            input.value = "";
-        }
-
-        socket.on("receive_message", function(message) {
-
-            let messagesDiv = document.getElementById("messages");
-
-            messagesDiv.innerHTML += "<p>" + message + "</p>";
-
-        });
-
-    </script>
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+  });
+</script>
 
 </body>
-
 </html>
